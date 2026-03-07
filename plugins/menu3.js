@@ -13,14 +13,12 @@ cmd({
 }, async (conn, mek, m, { from, sender, isGroup, reply }) => {
     try {
         const prefix = getPrefix();
-        const caption = **
-**  NYX MD Bot Menu List
-** Owner: NYX Development
-** Prefix: ${prefix}
-** Version: 1.0.0
-**
+        const caption = `*NYX MD Bot Menu List*
+*Owner:* NYX Development
+*Prefix:* ${prefix}
+*Version:* 1.0.0
 
-Select a category to view commands.;
+Select a category to view commands.`;
 
         if (isGroup) {
             await conn.sendMessage(from, { text: caption }, { quoted: mek });
