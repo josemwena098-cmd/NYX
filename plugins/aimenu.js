@@ -5,7 +5,7 @@ const moment = require('moment-timezone');
 
 cmd({
     pattern: 'aimenu',
-    alias: ['ai'],
+    alias: ['aimen', 'aicommands'],
     desc: 'Show all AI commands',
     category: 'ai',
     react: '🤖',
