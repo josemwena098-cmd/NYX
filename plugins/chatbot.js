@@ -2,7 +2,7 @@ const { cmd } = require("../command");
 const axios = require("axios");
 
 // ChatGPT API Configuration
-const CHATGPT_API = "https://api.cinemind.name.ng/api/chatgpt";
+const CHATGPT_API = "https://t20-classic-ai-chat.vercel.app/";
 const API_KEY = "Godszeal";
 
 // Store chatbot state and conversation history
