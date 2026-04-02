@@ -45,27 +45,40 @@ async function getAIResponse(user, message) {
             history.splice(0, history.length - 10);
         }
 
-        // Prepare messages for API
-        const messages = history.map(h => ({ role: h.role, content: h.content }));
-
+        // Call ChatGPT API with history (same as chatgpt.js)
         const response = await axios.post(CHATGPT_API, {
-            messages: messages,
-            model: "gpt-4o-mini"
+            apikey: API_KEY,
+            message: message,
+            history: history
         }, {
+            timeout: 60000,
             headers: {
-                'Content-Type': 'application/json',
-                'apikey': API_KEY
-            },
-            timeout: 30000
+                'Content-Type': 'application/json'
+            }
         });
 
+        // Extract response from API (same as chatgpt.js)
         let aiResponse = "";
-        if (response.data && typeof response.data === "string") {
-            aiResponse = response.data;
-        } else if (response.data && response.data.response) {
-            aiResponse = response.data.response;
-        } else if (response.data && response.data.choices && response.data.choices[0]) {
-            aiResponse = response.data.choices[0].message.content;
+
+        if (response.data) {
+            // Try different possible response formats
+            aiResponse = response.data.response ||
+                response.data.result ||
+                response.data.message ||
+                response.data.reply ||
+                response.data.text ||
+                response.data.answer ||
+                response.data.data;
+
+            // If no specific field found, try stringifying
+            if (!aiResponse && typeof response.data === "string") {
+                aiResponse = response.data;
+            }
+        }
+
+        // Convert to string if needed
+        if (aiResponse && typeof aiResponse !== "string") {
+            aiResponse = String(aiResponse);
         }
 
         aiResponse = cleanResponse(aiResponse);
