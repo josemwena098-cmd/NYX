@@ -8,6 +8,20 @@ const API_KEY = "Godszeal";
 // Store conversation history for each user
 const conversationHistory = new Map();
 
+// Function to clean promotional text from responses
+function cleanResponse(text) {
+    if (!text) return text;
+
+    // Remove Pollinations.AI ads and promotional content
+    let cleaned = text.replace(/\*Support Pollinations\.AI:[\s\S]*?Powered by Pollinations\.AI.*?\[Support our mission\].*?\)/gi, '');
+    cleaned = cleaned.replace(/---[\s\S]*?Pollinations\.AI/gi, '');
+    cleaned = cleaned.replace(/"source":\s*"pollinations"/gi, '');
+    cleaned = cleaned.replace(/"model":\s*"[^"]*"/gi, '');
+    cleaned = cleaned.replace(/\n\n+/g, '\n\n'); // Remove excessive newlines
+
+    return cleaned.trim();
+}
+
 cmd({
     pattern: "chatgpt",
     alias: ["gpt", "ask", "ai"],
@@ -17,11 +31,23 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, { from, q, reply }) => {
     try {
+        // Get quoted message context if replying to an AI message
+        let quotedContext = "";
+        let fullMessage = q;
+
+        if (m.quoted) {
+            const quotedText = m.quoted.body || m.quoted.text || "";
+            if (quotedText) {
+                quotedContext = quotedText.substring(0, 200); // Get first 200 chars for context
+                fullMessage = `[Previous context: "${quotedContext}"]\n\nNew question: ${q}`;
+            }
+        }
+
         if (!q) {
             return reply(
                 "❌ *Please provide a question or prompt.*\n\n" +
                 "📝 *Example:* .chatgpt What is the capital of France?\n\n" +
-                "💡 *Tip:* Use .aiinfo for more commands"
+                "💡 *Tips:*\n• Reply to an AI message to continue the conversation\n• Use .resetai to clear history"
             );
         }
 
@@ -37,15 +63,15 @@ cmd({
         // Add user message to history
         history.push({ role: "user", content: q });
 
-        // Keep only last 10 messages to avoid token limits
-        if (history.length > 10) {
-            history = history.slice(-10);
+        // Keep only last 15 messages to maintain context
+        if (history.length > 15) {
+            history = history.slice(-15);
         }
 
-        // Call ChatGPT API (POST method)
+        // Call ChatGPT API with history
         const response = await axios.post(CHATGPT_API, {
             apikey: API_KEY,
-            message: q,
+            message: fullMessage,
             history: history
         }, {
             timeout: 60000,
@@ -78,8 +104,9 @@ cmd({
             responseText = JSON.stringify(responseText);
         }
 
-        // Ensure responseText is a string before calling trim
+        // Ensure responseText is a string and clean it
         responseText = String(responseText || "").trim();
+        responseText = cleanResponse(responseText);
 
         if (!responseText) {
             return reply("❌ *API returned empty response.*\nPlease try again later.");
@@ -89,17 +116,23 @@ cmd({
         history.push({ role: "assistant", content: responseText });
         conversationHistory.set(from, history);
 
-        // Format and send response
+        // Format and send response with better spacing
         const finalMessage = `
-╭─────〔 🤖 *CHATGPT* 〕─────◆
-│
-💬 *Question:* ${q}
-│
-🎯 *Answer:* 
+╭────────────────────────────╮
+│  🤖 *CHATGPT RESPONSE*
+╰────────────────────────────╯
+
+💬 *Your Question:*
+${q}
+
+🎯 *Answer:*
 ${responseText}
-│
-╰───────────────◆
-📌 *Tip:* Reply with .resetai to clear history
+
+╭────────────────────────────╮
+│  📌 *Tips:*
+│  • Reply to continue chat
+│  • Type .resetai to clear
+╰────────────────────────────╯
       `.trim();
 
         await conn.sendMessage(from, { text: finalMessage }, { quoted: mek });
@@ -186,14 +219,29 @@ cmd({
             responseText = JSON.stringify(responseText);
         }
 
-        // Ensure responseText is a string
+        // Ensure responseText is a string and clean
         responseText = String(responseText || "").trim();
+        responseText = cleanResponse(responseText);
 
         if (!responseText) {
             return reply("❌ *Failed to generate response.* Please try again.");
         }
 
-        const finalMessage = `🚀 *ADVANCED AI RESPONSE*\n\n${responseText}\n\n━━━━━━━━━━━━━━\n💡 *Tip:* Use .gpt for faster responses`;
+        const finalMessage = `
+╭────────────────────────────╮
+│  🚀 *ADVANCED AI MODE*
+╰────────────────────────────╯
+
+📝 *Your Query:*
+${detailedPrompt.substring(0, 100)}...
+
+🎯 *Detailed Response:*
+${responseText}
+
+╭────────────────────────────╮
+│  💡 Use .gpt for quick mode
+╰────────────────────────────╯
+      `.trim();
 
         await conn.sendMessage(from, { text: finalMessage }, { quoted: mek });
 
@@ -245,8 +293,10 @@ cmd({
         }
 
         responseText = String(responseText).trim();
+        responseText = cleanResponse(responseText);
 
-        await reply(`💬 *AI:* ${responseText}`);
+        const quickResponse = `💬 *Quick AI Response*\n\n${responseText}`;
+        await reply(quickResponse);
 
     } catch (error) {
         console.error("Quick AI error:", error);
@@ -302,18 +352,22 @@ cmd({
         }
 
         responseText = String(responseText || "").trim();
+        responseText = cleanResponse(responseText);
 
         if (!responseText) {
             return reply("❌ *Failed to generate content.* Please try again.");
         }
 
         const finalMessage = `
-✨ *CREATIVE CONTENT* ✨
+╭────────────────────────────╮
+│  ✨ *CREATIVE CONTENT*
+╰────────────────────────────╯
 
 ${responseText}
 
-━━━━━━━━━━━━━━
-🎨 *Generated by AI | NYX Bot*
+╭────────────────────────────╮
+│  🎨 Generated by NYX AI Bot
+╰────────────────────────────╯
         `.trim();
 
         await conn.sendMessage(from, { text: finalMessage }, { quoted: mek });
@@ -467,19 +521,29 @@ cmd({
         }
 
         responseText = String(responseText || "").trim();
+        responseText = cleanResponse(responseText);
 
         if (!responseText) {
             return reply("❌ *Failed to analyze message.* Please try again.");
         }
 
         const formattedResponse = `
-💭 *AI RESPONSE*
+╭────────────────────────────╮
+│  💭 *AI ANALYSIS*
+╰────────────────────────────╯
 
-📝 *Context:* "${quotedText.substring(0, 100)}${quotedText.length > 100 ? '...' : ''}"
+📝 *Context:*
+"${quotedText.substring(0, 100)}${quotedText.length > 100 ? '...' : ''}"
 
-❓ *Question:* ${question}
+❓ *Question:*
+${question}
 
-🤖 *Answer:* ${responseText}
+🎯 *Analysis:*
+${responseText}
+
+╭────────────────────────────╮
+│  ✅ Analysis Complete
+╰────────────────────────────╯
         `.trim();
 
         await reply(formattedResponse);
