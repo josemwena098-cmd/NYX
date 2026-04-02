@@ -31,7 +31,24 @@ function extractVideoId(url) {
     return null;
 }
 
-// Enhanced play command with Cinemind API
+// Helper function to format file name
+function formatFileName(title) {
+    return title.replace(/[^\w\s.-]/gi, "").replace(/\s+/g, '_').slice(0, 50);
+}
+
+// Helper function to format duration
+function formatDuration(seconds) {
+    if (!seconds || seconds === "Unknown") return "Unknown";
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Main YouTube Audio Download Command with Cinemind API
 cmd({
     pattern: "play",
     alias: ["song", "audio", "mp3", "ytmp3", "yta"],
@@ -43,7 +60,7 @@ cmd({
 }, async (conn, mek, m, { from, reply, q }) => {
     try {
         let input = q || (m.quoted && m.quoted.text?.trim());
-        if (!input) return reply("❌ *Please enter a song name or YouTube link!*");
+        if (!input) return reply("❌ *Please enter a song name or YouTube link!*\n\n📝 *Example:* .play Believer Imagine Dragons");
 
         await reply("🔍 *Searching YouTube...*");
 
@@ -55,7 +72,7 @@ cmd({
             videoId = extractVideoId(videoUrl);
             if (!videoId) return reply("❌ *Invalid YouTube URL!*");
             
-            // Try to get video info from Cinemind search
+            // Try to get video info
             try {
                 const infoResponse = await axios.get(`${CINEMIND_API.BASE}${CINEMIND_API.YT_SEARCH}`, {
                     params: { q: videoUrl },
@@ -65,9 +82,9 @@ cmd({
                     const info = infoResponse.data.data[0];
                     videoTitle = info.title;
                     videoThumbnail = info.thumbnail;
-                    duration = info.duration;
-                    views = info.views;
-                    author = info.channel;
+                    duration = info.duration ? formatDuration(parseInt(info.duration)) : "Unknown";
+                    views = info.views ? info.views.toLocaleString() : "Unknown";
+                    author = info.channel || "Unknown";
                 } else {
                     videoTitle = "YouTube Audio";
                     videoThumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
@@ -96,9 +113,9 @@ cmd({
                     videoTitle = vid.title;
                     videoThumbnail = vid.thumbnail;
                     videoId = extractVideoId(videoUrl);
-                    duration = vid.duration;
-                    views = vid.views;
-                    author = vid.channel;
+                    duration = vid.duration ? formatDuration(parseInt(vid.duration)) : "Unknown";
+                    views = vid.views ? vid.views.toLocaleString() : "Unknown";
+                    author = vid.channel || "Unknown";
                 } else {
                     // Fallback to ytsearch
                     const search = await ytsearch(input);
@@ -110,7 +127,7 @@ cmd({
                     videoThumbnail = vid.thumbnail;
                     videoId = extractVideoId(videoUrl);
                     duration = vid.timestamp || "Unknown";
-                    views = vid.views || "Unknown";
+                    views = vid.views ? vid.views.toLocaleString() : "Unknown";
                     author = vid.author?.name || "Unknown";
                 }
             } catch (searchError) {
@@ -124,33 +141,27 @@ cmd({
                 videoThumbnail = vid.thumbnail;
                 videoId = extractVideoId(videoUrl);
                 duration = vid.timestamp || "Unknown";
-                views = vid.views || "Unknown";
+                views = vid.views ? vid.views.toLocaleString() : "Unknown";
                 author = vid.author?.name || "Unknown";
             }
         }
 
-        const cleanTitle = videoTitle.replace(/[^\w\s.-]/gi, "").slice(0, 50);
+        const cleanTitle = formatFileName(videoTitle);
 
         // Send video info
         await conn.sendMessage(from, {
             image: { url: videoThumbnail },
             caption: `
-╭───〘 🎵 𝚈𝙾𝚄𝚃𝚄𝙱𝙴 𝙰𝚄𝙳𝙸𝙾 〙───◆
-│ 📝 *ᴛɪᴛʟᴇ:* ${videoTitle}
-│ ⏱️ *ᴅᴜʀᴀᴛɪᴏɴ:* ${duration}
-│ 👁️ *ᴠɪᴇᴡs:* ${views}
-│ 👤 *ᴀᴜᴛʜᴏʀ:* ${author}
-│ 🔗 *ᴜʀʟ:* ${videoUrl}
+╭───〘 🎵 YOUTUBE AUDIO 〙───◆
+│ 📝 *Title:* ${videoTitle}
+│ ⏱️ *Duration:* ${duration}
+│ 👁️ *Views:* ${views}
+│ 👤 *Author:* ${author}
+│ 🔗 *URL:* ${videoUrl}
 ╰───────────────◆
-🎧 *Downloading audio...*
+⬇️ *Downloading audio... Please wait*
             `.trim()
         }, { quoted: mek });
-
-        // Create temp directory if it doesn't exist
-        const tempDir = path.join(__dirname, '..', 'temp');
-        if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-        }
 
         // Multiple API endpoints with Cinemind as primary
         const apis = [
@@ -159,8 +170,7 @@ cmd({
                 url: `${CINEMIND_API.BASE}${CINEMIND_API.DOWNLOAD_AUDIO}`,
                 params: { url: videoUrl },
                 method: 'GET',
-                parseUrl: (data) => data?.downloadUrl || data?.result || data?.url,
-                isJson: true
+                parseUrl: (data) => data?.downloadUrl || data?.result || data?.url
             },
             {
                 name: 'Cobalt',
@@ -168,16 +178,14 @@ cmd({
                 headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                 body: { url: videoUrl, vQuality: '128', aFormat: 'mp3' },
                 method: 'POST',
-                parseUrl: (data) => data?.url || data?.links?.download?.url,
-                isJson: true
+                parseUrl: (data) => data?.url || data?.links?.download?.url
             },
             {
                 name: 'Vihanga',
                 url: `https://api.vihangayt.com/download`,
                 params: { url: videoUrl, type: 'audio' },
                 method: 'GET',
-                parseUrl: (data) => data?.url || data?.data?.url || data?.result,
-                isJson: true
+                parseUrl: (data) => data?.url || data?.data?.url || data?.result
             }
         ];
 
@@ -253,7 +261,7 @@ cmd({
             await conn.sendMessage(from, {
                 react: { text: "❌", key: mek.key }
             });
-            reply("🚫 *All download servers failed. Please try again later.*\nℹ️ Try using .playx for legacy support.");
+            reply("🚫 *All download servers failed. Please try again later.*\n💡 *Tip:* Try using a direct YouTube URL or check your connection.");
         }
 
     } catch (e) {
@@ -265,10 +273,10 @@ cmd({
     }
 });
 
-// Enhanced video command with Cinemind API
+// YouTube Video Download Command with Cinemind API
 cmd({
     pattern: "video",
-    alias: ["mp4", "ytmp4", "ytv"],
+    alias: ["mp4", "ytmp4", "ytv", "vd"],
     react: "🎬",
     desc: "Download YouTube video with Cinemind API",
     category: "download",
@@ -277,7 +285,7 @@ cmd({
 }, async (conn, mek, m, { from, reply, q }) => {
     try {
         let input = q || (m.quoted && m.quoted.text?.trim());
-        if (!input) return reply("❌ *Please enter a video name or YouTube link!*");
+        if (!input) return reply("❌ *Please enter a video name or YouTube link!*\n\n📝 *Example:* .video Baby Shark Dance");
 
         await reply("🔍 *Searching YouTube...*");
 
@@ -299,9 +307,9 @@ cmd({
                     const info = infoResponse.data.data[0];
                     videoTitle = info.title;
                     videoThumbnail = info.thumbnail;
-                    duration = info.duration;
-                    views = info.views;
-                    author = info.channel;
+                    duration = info.duration ? formatDuration(parseInt(info.duration)) : "Unknown";
+                    views = info.views ? info.views.toLocaleString() : "Unknown";
+                    author = info.channel || "Unknown";
                 } else {
                     videoTitle = "YouTube Video";
                     videoThumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
@@ -330,9 +338,9 @@ cmd({
                     videoTitle = vid.title;
                     videoThumbnail = vid.thumbnail;
                     videoId = extractVideoId(videoUrl);
-                    duration = vid.duration;
-                    views = vid.views;
-                    author = vid.channel;
+                    duration = vid.duration ? formatDuration(parseInt(vid.duration)) : "Unknown";
+                    views = vid.views ? vid.views.toLocaleString() : "Unknown";
+                    author = vid.channel || "Unknown";
                 } else {
                     // Fallback to ytsearch
                     const search = await ytsearch(input);
@@ -344,7 +352,7 @@ cmd({
                     videoThumbnail = vid.thumbnail;
                     videoId = extractVideoId(videoUrl);
                     duration = vid.timestamp || "Unknown";
-                    views = vid.views || "Unknown";
+                    views = vid.views ? vid.views.toLocaleString() : "Unknown";
                     author = vid.author?.name || "Unknown";
                 }
             } catch (searchError) {
@@ -358,25 +366,25 @@ cmd({
                 videoThumbnail = vid.thumbnail;
                 videoId = extractVideoId(videoUrl);
                 duration = vid.timestamp || "Unknown";
-                views = vid.views || "Unknown";
+                views = vid.views ? vid.views.toLocaleString() : "Unknown";
                 author = vid.author?.name || "Unknown";
             }
         }
 
-        const cleanTitle = videoTitle.replace(/[^\w\s.-]/gi, "").slice(0, 50);
+        const cleanTitle = formatFileName(videoTitle);
 
         // Send video info
         await conn.sendMessage(from, {
             image: { url: videoThumbnail },
             caption: `
-╭───〘 🎬 𝚈𝙾𝚄𝚃𝚄𝙱𝙴 𝚅𝙸𝙳𝙴𝙾 〙───◆
-│ 📝 *ᴛɪᴛʟᴇ:* ${videoTitle}
-│ ⏱️ *ᴅᴜʀᴀᴛɪᴏɴ:* ${duration}
-│ 👁️ *ᴠɪᴇᴡs:* ${views}
-│ 👤 *ᴀᴜᴛʜᴏʀ:* ${author}
-│ 🔗 *ᴜʀʟ:* ${videoUrl}
+╭───〘 🎬 YOUTUBE VIDEO 〙───◆
+│ 📝 *Title:* ${videoTitle}
+│ ⏱️ *Duration:* ${duration}
+│ 👁️ *Views:* ${views}
+│ 👤 *Author:* ${author}
+│ 🔗 *URL:* ${videoUrl}
 ╰───────────────◆
-🎬 *Downloading video...*
+⬇️ *Downloading video... Please wait*
             `.trim()
         }, { quoted: mek });
 
@@ -437,7 +445,7 @@ cmd({
 
                 await conn.sendMessage(from, {
                     video: { url: downloadUrl },
-                    caption: `🎬 *${videoTitle}*`,
+                    caption: `🎬 *${videoTitle}*\n\nDownloaded via ${apiConfig.name} API`,
                     fileName: `${cleanTitle}.mp4`,
                     mimetype: 'video/mp4'
                 }, { quoted: mek });
@@ -459,7 +467,7 @@ cmd({
             await conn.sendMessage(from, {
                 react: { text: "❌", key: mek.key }
             });
-            reply("🚫 *All video download servers failed. Please try again later.*");
+            reply("🚫 *All video download servers failed. Please try again later.*\n💡 *Tip:* Try using a direct YouTube URL or check your connection.");
         }
 
     } catch (e) {
@@ -467,11 +475,11 @@ cmd({
         await conn.sendMessage(from, {
             react: { text: "❌", key: mek.key }
         });
-        reply("🚨 *Something went wrong while downloading video!*");
+        reply("🚨 *Something went wrong while downloading video!*\n" + e.message);
     }
 });
 
-// TikTok downloader with Cinemind API
+// TikTok Downloader with Cinemind API
 cmd({
     pattern: "tiktok",
     alias: ["tt", "ttdl", "tiktokdl"],
@@ -483,7 +491,7 @@ cmd({
 }, async (conn, mek, m, { from, reply, q }) => {
     try {
         let url = q || (m.quoted && m.quoted.text?.trim());
-        if (!url) return reply("❌ *Please provide a TikTok URL!*\nExample: .tiktok https://www.tiktok.com/@user/video/123456789");
+        if (!url) return reply("❌ *Please provide a TikTok URL!*\n\n📝 *Example:* .tiktok https://www.tiktok.com/@user/video/123456789");
         
         if (!url.includes('tiktok.com')) {
             return reply("❌ *Please provide a valid TikTok URL!*");
@@ -504,7 +512,7 @@ cmd({
                 await conn.sendMessage(from, {
                     video: { url: downloadUrl },
                     mimetype: "video/mp4",
-                    caption: "📱 *TikTok Video*\nDownloaded with Cinemind API",
+                    caption: "📱 *TikTok Video*\n\nDownloaded with Cinemind API",
                     contextInfo: {
                         forwardingScore: 999,
                         isForwarded: true
@@ -515,7 +523,7 @@ cmd({
                     react: { text: "✅", key: mek.key }
                 });
             } else {
-                return reply("❌ *Failed to download TikTok video.*\nPlease check the URL and try again.");
+                return reply("❌ *Failed to download TikTok video.*\n💡 Please check the URL and try again.");
             }
         } catch (error) {
             console.error('TikTok download error:', error);
@@ -527,7 +535,7 @@ cmd({
     }
 });
 
-// Facebook downloader with Cinemind API
+// Facebook Downloader with Cinemind API
 cmd({
     pattern: "fb",
     alias: ["facebook", "fbdl", "facebookdl"],
@@ -539,7 +547,7 @@ cmd({
 }, async (conn, mek, m, { from, reply, q }) => {
     try {
         let url = q || (m.quoted && m.quoted.text?.trim());
-        if (!url) return reply("❌ *Please provide a Facebook video URL!*\nExample: .fb https://www.facebook.com/watch?v=123456789");
+        if (!url) return reply("❌ *Please provide a Facebook video URL!*\n\n📝 *Example:* .fb https://www.facebook.com/watch?v=123456789");
         
         if (!url.includes('facebook.com') && !url.includes('fb.watch')) {
             return reply("❌ *Please provide a valid Facebook video URL!*");
@@ -560,7 +568,7 @@ cmd({
                 await conn.sendMessage(from, {
                     video: { url: downloadUrl },
                     mimetype: "video/mp4",
-                    caption: "📘 *Facebook Video*\nDownloaded with Cinemind API",
+                    caption: "📘 *Facebook Video*\n\nDownloaded with Cinemind API",
                     contextInfo: {
                         forwardingScore: 999,
                         isForwarded: true
@@ -571,7 +579,7 @@ cmd({
                     react: { text: "✅", key: mek.key }
                 });
             } else {
-                return reply("❌ *Failed to download Facebook video.*\nPlease check the URL and try again.");
+                return reply("❌ *Failed to download Facebook video.*\n💡 Please check the URL and try again.");
             }
         } catch (error) {
             console.error('Facebook download error:', error);
@@ -583,7 +591,7 @@ cmd({
     }
 });
 
-// Instagram downloader with Cinemind API
+// Instagram Downloader with Cinemind API
 cmd({
     pattern: "ig",
     alias: ["instagram", "igdl", "insta", "reel"],
@@ -595,7 +603,7 @@ cmd({
 }, async (conn, mek, m, { from, reply, q }) => {
     try {
         let url = q || (m.quoted && m.quoted.text?.trim());
-        if (!url) return reply("❌ *Please provide an Instagram URL!*\nExample: .ig https://www.instagram.com/reel/xyz123");
+        if (!url) return reply("❌ *Please provide an Instagram URL!*\n\n📝 *Example:* .ig https://www.instagram.com/reel/xyz123");
         
         if (!url.includes('instagram.com')) {
             return reply("❌ *Please provide a valid Instagram URL!*");
@@ -617,7 +625,7 @@ cmd({
                     await conn.sendMessage(from, {
                         video: { url: media.url },
                         mimetype: "video/mp4",
-                        caption: "📸 *Instagram Video*\nDownloaded with Cinemind API",
+                        caption: "📸 *Instagram Video*\n\nDownloaded with Cinemind API",
                         contextInfo: {
                             forwardingScore: 999,
                             isForwarded: true
@@ -626,7 +634,7 @@ cmd({
                 } else if (media.type === 'image' && media.url) {
                     await conn.sendMessage(from, {
                         image: { url: media.url },
-                        caption: "📸 *Instagram Image*\nDownloaded with Cinemind API",
+                        caption: "📸 *Instagram Image*\n\nDownloaded with Cinemind API",
                         contextInfo: {
                             forwardingScore: 999,
                             isForwarded: true
@@ -647,14 +655,14 @@ cmd({
                         }
                     }
                 } else {
-                    return reply("❌ *Failed to download Instagram media.*\nUnsupported media format.");
+                    return reply("❌ *Failed to download Instagram media.*\n💡 Unsupported media format.");
                 }
                 
                 await conn.sendMessage(from, {
                     react: { text: "✅", key: mek.key }
                 });
             } else {
-                return reply("❌ *Failed to download Instagram media.*\nPlease check the URL and try again.");
+                return reply("❌ *Failed to download Instagram media.*\n💡 Please check the URL and try again.");
             }
         } catch (error) {
             console.error('Instagram download error:', error);
@@ -666,5 +674,80 @@ cmd({
     }
 });
 
-// Keep your existing commands (playx, videox, oldplay) as fallbacks
-// ... (your existing code for playx, videox, oldplay remains here)
+// YouTube Search Command
+cmd({
+    pattern: "ytsearch",
+    alias: ["yts", "youtube"],
+    react: "🔍",
+    desc: "Search YouTube videos",
+    category: "download",
+    use: '.ytsearch <search query>',
+    filename: __filename
+}, async (conn, mek, m, { from, reply, q }) => {
+    try {
+        if (!q) return reply("🔍 *Usage:* .ytsearch <search query>\n\n📝 *Example:* .ytsearch Imagine Dragons");
+
+        await reply("🔍 *Searching YouTube...*");
+
+        try {
+            const searchResponse = await axios.get(`${CINEMIND_API.BASE}${CINEMIND_API.YT_SEARCH}`, {
+                params: { q: q },
+                timeout: 15000
+            });
+
+            let videos = [];
+            
+            if (searchResponse.data?.status && searchResponse.data?.data?.length > 0) {
+                videos = searchResponse.data.data.slice(0, 5);
+            } else {
+                // Fallback to ytsearch
+                const search = await ytsearch(q);
+                if (search?.results?.length > 0) {
+                    videos = search.results.slice(0, 5);
+                } else {
+                    return reply("❌ *No results found for your search.*");
+                }
+            }
+
+            let message = `🔍 *YouTube Search Results*\n📝 *Query:* ${q}\n\n`;
+
+            videos.forEach((video, index) => {
+                const duration = video.duration ? formatDuration(parseInt(video.duration)) : (video.timestamp || 'N/A');
+                message += `${index + 1}. *${video.title || 'Unknown'}*\n`;
+                message += `📺 ${video.channel || video.author?.name || 'Unknown Channel'}\n`;
+                message += `⏱️ ${duration}\n`;
+                message += `🔗 ${video.url || video.link}\n\n`;
+            });
+
+            message += `\n💡 *Use .play or .video to download*`;
+
+            const thumbnail = videos[0].thumbnail || videos[0].image;
+            
+            if (thumbnail) {
+                await conn.sendMessage(from, {
+                    image: { url: thumbnail },
+                    caption: message,
+                    contextInfo: {
+                        forwardingScore: 999,
+                        isForwarded: true
+                    }
+                }, { quoted: mek });
+            } else {
+                await conn.sendMessage(from, {
+                    text: message
+                }, { quoted: mek });
+            }
+
+        } catch (searchError) {
+            console.error('YouTube search error:', searchError);
+            return reply("❌ *Failed to search YouTube.*\n💡 Please try again later.");
+        }
+
+    } catch (error) {
+        console.error('Search error:', error);
+        reply(`❌ *Error:* ${error.message}`);
+    }
+});
+
+// Keep your existing legacy commands (playx, videox, oldplay) as fallbacks
+// They will remain here unchanged...
