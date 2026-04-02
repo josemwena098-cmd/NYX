@@ -74,6 +74,11 @@ async function getAIResponse(user, message) {
             if (!aiResponse && typeof response.data === "string") {
                 aiResponse = response.data;
             }
+
+            // If aiResponse is still an object, try to extract text or stringify
+            if (aiResponse && typeof aiResponse === "object") {
+                aiResponse = aiResponse.text || aiResponse.content || aiResponse.message || JSON.stringify(aiResponse);
+            }
         }
 
         // Convert to string if needed
