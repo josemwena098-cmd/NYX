@@ -4,14 +4,14 @@ const fs = require("fs");
 
 cmd({
   pattern: "fluxai",
-  alias: ["flux", "imagine"],
+  alias: ["flux"],
   react: "🚀",
   desc: "Generate an image using AI.",
-  category: "main",
+  category: "ai",
   filename: __filename
 }, async (conn, mek, m, { from, q, reply }) => {
   try {
-    if (!q) return reply("❌ Please provide a prompt for the image.\n\nExample: .imagine a beautiful sunset");
+    if (!q) return reply("❌ Please provide a prompt for the image.\n\nExample: .fluxai a beautiful sunset");
 
     await reply("> *⏳ CREATING IMAGE ...🔥*");
 
@@ -38,10 +38,10 @@ cmd({
 
 cmd({
   pattern: "stablediffusion",
-  alias: ["sdiffusion", "imagine2"],
+  alias: ["sdiffusion"],
   react: "🚀",
   desc: "Generate an image using Stable Diffusion.",
-  category: "main",
+  category: "ai",
   filename: __filename
 }, async (conn, mek, m, { from, q, reply }) => {
   try {
@@ -72,10 +72,10 @@ cmd({
 
 cmd({
   pattern: "stabilityai",
-  alias: ["stability", "imagine3"],
+  alias: ["stability"],
   react: "🚀",
-  desc: "Generate an image using AI.",
-  category: "main",
+  desc: "Generate an image using Stability AI.",
+  category: "ai",
   filename: __filename
 }, async (conn, mek, m, { from, q, reply }) => {
   try {
