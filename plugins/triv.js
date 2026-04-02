@@ -12,6 +12,12 @@ cmd({
   try {
     // Fetch a quiz question from the API
     const response = await axios.get('https://the-trivia-api.com/v2/questions?limit=1');
+
+    // Add safety check for data existence
+    if (!response || !response.data || !Array.isArray(response.data) || response.data.length === 0) {
+      return reply('❌ Failed to fetch a quiz question. The API is not responding properly. Please try again later.');
+    }
+
     const questionData = response.data[0];
 
     if (!questionData) {
