@@ -104,7 +104,12 @@ async function runShareDownloader(conn, mek, from, source, url, reply, requested
 
     let output = sanitizeJsonResponse(response.data);
     const replyText = `*${label}*\nType: ${requestedType}\nURL: ${url}\n\n*Result:*\n${output}`;
-    return conn.sendMessage(from, { text: replyText }, { quoted: mek });
+
+    if ((source === "ytmp3" || source === "spotify") && response.data && typeof response.data === "object" && response.data.url) {
+        await conn.sendMessage(from, { audio: { url: response.data.url }, mimetype: 'audio/mpeg' }, { quoted: mek });
+    } else {
+        await conn.sendMessage(from, { text: replyText }, { quoted: mek });
+    }
 }
 
 function sourceForType(type, url) {
@@ -172,7 +177,11 @@ cmd({
 
         const replyText = `*${label}*\nSource: ${source}\nURL: ${url}\n\n*Result:*\n${output}`;
 
-        await conn.sendMessage(from, { text: replyText }, { quoted: mek });
+        if ((source === "ytmp3" || source === "spotify") && response.data && typeof response.data === "object" && response.data.url) {
+            await conn.sendMessage(from, { audio: { url: response.data.url }, mimetype: 'audio/mpeg' }, { quoted: mek });
+        } else {
+            await conn.sendMessage(from, { text: replyText }, { quoted: mek });
+        }
 
     } catch (error) {
         console.error("Downloader plugin error:", error);
