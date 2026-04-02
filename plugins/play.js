@@ -1,6 +1,5 @@
 const config = require('../config');
 const { cmd } = require('../command');
-const { ytsearch } = require('@dark-yasiya/yt-dl.js');
 const axios = require('axios');
 
 // Cinemind API configuration
@@ -25,289 +24,187 @@ function extractVideoId(url) {
     return null;
 }
 
-// Helper function to format file name
-function formatFileName(title) {
-    return title.replace(/[^\w\s.-]/gi, "").replace(/\s+/g, '_').slice(0, 50);
-}
-
-// Main YouTube Audio Download Command
+// Simple YouTube Audio Download
 cmd({
     pattern: "play",
-    alias: ["song", "audio", "mp3", "ytmp3", "yta"],
+    alias: ["song"],
     react: "🎵",
     desc: "Download YouTube audio",
     category: "download",
-    use: '.play <song name or YouTube URL>',
-    filename: __filename
+    use: '.play <song name>'
 }, async (conn, mek, m, { from, reply, q }) => {
     try {
-        let input = q || (m.quoted && m.quoted.text?.trim());
-        if (!input) return reply("❌ Please enter a song name or YouTube link!\n\nExample: .play Believer Imagine Dragons");
-
-        await reply("🔍 Searching YouTube...");
-
-        let videoUrl, videoTitle, videoThumbnail, videoId;
-
-        // Check if input is a YouTube URL
-        if (input.match(/(youtube\.com|youtu\.be)/i)) {
-            videoUrl = input.trim();
-            videoId = extractVideoId(videoUrl);
-            if (!videoId) return reply("❌ Invalid YouTube URL!");
-            videoTitle = "YouTube Audio";
-            videoThumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-        } else {
-            try {
-                // Try Cinemind search first
-                const searchResponse = await axios.get(`${CINEMIND_API.BASE}${CINEMIND_API.YT_SEARCH}`, {
-                    params: { q: input },
-                    timeout: 10000
-                });
-
-                if (searchResponse.data?.status && searchResponse.data?.data?.length > 0) {
-                    const vid = searchResponse.data.data[0];
-                    videoUrl = vid.url;
-                    videoTitle = vid.title;
-                    videoThumbnail = vid.thumbnail;
-                    videoId = extractVideoId(videoUrl);
-                } else {
-                    throw new Error('No results from Cinemind');
-                }
-            } catch (searchError) {
-                // Fallback to ytsearch
-                const search = await ytsearch(input);
-                const vid = search?.results?.[0];
-                if (!vid || !vid.url) return reply("❌ No results found!");
-                
-                videoUrl = vid.url;
-                videoTitle = vid.title;
-                videoThumbnail = vid.thumbnail;
-                videoId = extractVideoId(videoUrl);
-            }
+        console.log("Play command triggered with query:", q);
+        
+        if (!q) {
+            return reply("❌ Please enter a song name!\nExample: .play Believer");
         }
 
-        const cleanTitle = formatFileName(videoTitle);
+        await reply("🔍 Searching... Please wait");
+
+        // First, search for the video using yt-search (more reliable)
+        const yts = require('yt-search');
+        const searchResults = await yts(q);
+        
+        if (!searchResults || !searchResults.videos || searchResults.videos.length === 0) {
+            return reply("❌ No results found!");
+        }
+
+        const video = searchResults.videos[0];
+        const videoUrl = video.url;
+        const videoTitle = video.title;
+        const videoThumbnail = video.thumbnail;
+        
+        console.log("Found video:", videoTitle);
 
         // Send video info
         await conn.sendMessage(from, {
             image: { url: videoThumbnail },
-            caption: `🎵 *${videoTitle}*\n\n⬇️ Downloading audio...`
+            caption: `🎵 *${videoTitle}*\n\n⏳ Downloading audio...`
         }, { quoted: mek });
 
-        // Try Cinemind audio download
-        let audioUrl = null;
+        // Try to get download link using ytdl-core
+        const ytdl = require('ytdl-core');
         
         try {
-            const audioResponse = await axios.get(`${CINEMIND_API.BASE}${CINEMIND_API.DOWNLOAD_AUDIO}`, {
-                params: { url: videoUrl },
-                timeout: 30000
+            // Get audio stream
+            const audioStream = ytdl(videoUrl, {
+                quality: 'highestaudio',
+                filter: 'audioonly'
             });
-            
-            audioUrl = audioResponse.data?.downloadUrl || audioResponse.data?.result || audioResponse.data?.url;
-        } catch (err) {
-            console.log('Cinemind audio failed:', err.message);
-        }
 
-        // If Cinemind failed, try alternative API
-        if (!audioUrl) {
-            try {
-                const altResponse = await axios.get(`https://api.cobalt.tools/api/json`, {
-                    method: 'POST',
-                    data: { url: videoUrl, vQuality: '128', aFormat: 'mp3' },
-                    headers: { 'Content-Type': 'application/json' },
-                    timeout: 30000
-                });
-                audioUrl = altResponse.data?.url;
-            } catch (err) {
-                console.log('Cobalt audio failed:', err.message);
+            // Convert stream to buffer
+            const chunks = [];
+            for await (const chunk of audioStream) {
+                chunks.push(chunk);
             }
+            const audioBuffer = Buffer.concat(chunks);
+
+            if (!audioBuffer || audioBuffer.length === 0) {
+                throw new Error("No audio data received");
+            }
+
+            console.log(`Audio downloaded: ${(audioBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+
+            // Send audio
+            await conn.sendMessage(from, {
+                audio: audioBuffer,
+                mimetype: 'audio/mpeg',
+                fileName: `${videoTitle.slice(0, 50)}.mp3`,
+                ptt: false
+            }, { quoted: mek });
+
+            await conn.sendMessage(from, {
+                react: { text: "✅", key: mek.key }
+            });
+
+        } catch (downloadError) {
+            console.error("Download error:", downloadError);
+            return reply("❌ Failed to download audio. Try another song or use a direct YouTube URL.");
         }
 
-        if (!audioUrl) {
-            return reply("❌ Failed to get audio download link. Please try again later.");
-        }
-
-        // Download and send audio
-        const audioRes = await axios({
-            url: audioUrl,
-            method: "GET",
-            responseType: "arraybuffer",
-            timeout: 60000
-        });
-
-        if (!audioRes.data || audioRes.data.length === 0) {
-            return reply("❌ Failed to download audio file.");
-        }
-
-        await conn.sendMessage(from, {
-            audio: audioRes.data,
-            mimetype: 'audio/mpeg',
-            fileName: `${cleanTitle}.mp3`,
-            ptt: false
-        }, { quoted: mek });
-
-        await conn.sendMessage(from, {
-            react: { text: "✅", key: mek.key }
-        });
-
-    } catch (e) {
-        console.error("Error in .play command:", e);
-        await conn.sendMessage(from, {
-            react: { text: "❌", key: mek.key }
-        });
-        reply("❌ Error: " + e.message);
+    } catch (error) {
+        console.error("Play command error:", error);
+        reply("❌ Error: " + error.message);
     }
 });
 
-// YouTube Video Download Command
+// YouTube Video Download
 cmd({
     pattern: "video",
-    alias: ["mp4", "ytmp4", "ytv"],
+    alias: ["mp4"],
     react: "🎬",
     desc: "Download YouTube video",
     category: "download",
-    use: '.video <video name or YouTube URL>',
-    filename: __filename
+    use: '.video <video name>'
 }, async (conn, mek, m, { from, reply, q }) => {
     try {
-        let input = q || (m.quoted && m.quoted.text?.trim());
-        if (!input) return reply("❌ Please enter a video name or YouTube link!\n\nExample: .video Baby Shark Dance");
-
-        await reply("🔍 Searching YouTube...");
-
-        let videoUrl, videoTitle, videoThumbnail, videoId;
-
-        // Check if input is a YouTube URL
-        if (input.match(/(youtube\.com|youtu\.be)/i)) {
-            videoUrl = input.trim();
-            videoId = extractVideoId(videoUrl);
-            if (!videoId) return reply("❌ Invalid YouTube URL!");
-            videoTitle = "YouTube Video";
-            videoThumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-        } else {
-            try {
-                // Try Cinemind search first
-                const searchResponse = await axios.get(`${CINEMIND_API.BASE}${CINEMIND_API.YT_SEARCH}`, {
-                    params: { q: input },
-                    timeout: 10000
-                });
-
-                if (searchResponse.data?.status && searchResponse.data?.data?.length > 0) {
-                    const vid = searchResponse.data.data[0];
-                    videoUrl = vid.url;
-                    videoTitle = vid.title;
-                    videoThumbnail = vid.thumbnail;
-                    videoId = extractVideoId(videoUrl);
-                } else {
-                    throw new Error('No results from Cinemind');
-                }
-            } catch (searchError) {
-                // Fallback to ytsearch
-                const search = await ytsearch(input);
-                const vid = search?.results?.[0];
-                if (!vid || !vid.url) return reply("❌ No results found!");
-                
-                videoUrl = vid.url;
-                videoTitle = vid.title;
-                videoThumbnail = vid.thumbnail;
-                videoId = extractVideoId(videoUrl);
-            }
+        console.log("Video command triggered with query:", q);
+        
+        if (!q) {
+            return reply("❌ Please enter a video name!\nExample: .video Baby Shark");
         }
 
-        const cleanTitle = formatFileName(videoTitle);
+        await reply("🔍 Searching... Please wait");
+
+        // Search for the video
+        const yts = require('yt-search');
+        const searchResults = await yts(q);
+        
+        if (!searchResults || !searchResults.videos || searchResults.videos.length === 0) {
+            return reply("❌ No results found!");
+        }
+
+        const video = searchResults.videos[0];
+        const videoUrl = video.url;
+        const videoTitle = video.title;
+        const videoThumbnail = video.thumbnail;
+        
+        console.log("Found video:", videoTitle);
 
         // Send video info
         await conn.sendMessage(from, {
             image: { url: videoThumbnail },
-            caption: `🎬 *${videoTitle}*\n\n⬇️ Downloading video...`
+            caption: `🎬 *${videoTitle}*\n\n⏳ Downloading video...`
         }, { quoted: mek });
 
-        // Try Cinemind video download
-        let videoDownloadUrl = null;
+        // Download video using ytdl-core
+        const ytdl = require('ytdl-core');
         
         try {
-            const videoResponse = await axios.get(`${CINEMIND_API.BASE}${CINEMIND_API.DOWNLOAD_VIDEO}`, {
-                params: { url: videoUrl },
-                timeout: 30000
+            // Get video stream
+            const videoStream = ytdl(videoUrl, {
+                quality: 'lowest', // Use lowest for faster download
+                filter: 'videoandaudio'
             });
-            
-            videoDownloadUrl = videoResponse.data?.downloadUrl || videoResponse.data?.result || videoResponse.data?.url;
-        } catch (err) {
-            console.log('Cinemind video failed:', err.message);
-        }
 
-        // If Cinemind failed, try alternative API
-        if (!videoDownloadUrl) {
-            try {
-                const altResponse = await axios.post(`https://api.cobalt.tools/api/json`, {
-                    url: videoUrl,
-                    vQuality: '720',
-                    aFormat: 'mp4'
-                }, {
-                    headers: { 'Content-Type': 'application/json' },
-                    timeout: 30000
-                });
-                videoDownloadUrl = altResponse.data?.url;
-            } catch (err) {
-                console.log('Cobalt video failed:', err.message);
+            // Convert stream to buffer
+            const chunks = [];
+            for await (const chunk of videoStream) {
+                chunks.push(chunk);
             }
+            const videoBuffer = Buffer.concat(chunks);
+
+            if (!videoBuffer || videoBuffer.length === 0) {
+                throw new Error("No video data received");
+            }
+
+            console.log(`Video downloaded: ${(videoBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+
+            // Send video
+            await conn.sendMessage(from, {
+                video: videoBuffer,
+                caption: `🎬 *${videoTitle}*`,
+                mimetype: 'video/mp4'
+            }, { quoted: mek });
+
+            await conn.sendMessage(from, {
+                react: { text: "✅", key: mek.key }
+            });
+
+        } catch (downloadError) {
+            console.error("Download error:", downloadError);
+            return reply("❌ Failed to download video. Try another video or use a direct YouTube URL.");
         }
 
-        if (!videoDownloadUrl) {
-            return reply("❌ Failed to get video download link. Please try again later.");
-        }
-
-        // Send video
-        await conn.sendMessage(from, {
-            video: { url: videoDownloadUrl },
-            caption: `🎬 *${videoTitle}*`,
-            fileName: `${cleanTitle}.mp4`,
-            mimetype: 'video/mp4'
-        }, { quoted: mek });
-
-        await conn.sendMessage(from, {
-            react: { text: "✅", key: mek.key }
-        });
-
-    } catch (e) {
-        console.error("Error in .video command:", e);
-        await conn.sendMessage(from, {
-            react: { text: "❌", key: mek.key }
-        });
-        reply("❌ Error: " + e.message);
+    } catch (error) {
+        console.error("Video command error:", error);
+        reply("❌ Error: " + error.message);
     }
 });
 
-// Test command to check Cinemind API
+// Simple test command
 cmd({
-    pattern: "testapi",
-    alias: ["checkapi"],
-    react: "🔧",
-    desc: "Test Cinemind API connection",
-    category: "download",
-    use: '.testapi',
-    filename: __filename
+    pattern: "ping",
+    alias: ["test"],
+    react: "🏓",
+    desc: "Test bot response",
+    category: "general",
+    use: '.ping'
 }, async (conn, mek, m, { from, reply }) => {
     try {
-        await reply("🔧 Testing Cinemind API...");
-        
-        // Test search endpoint
-        const testSearch = await axios.get(`${CINEMIND_API.BASE}${CINEMIND_API.YT_SEARCH}`, {
-            params: { q: "test" },
-            timeout: 10000
-        });
-        
-        let message = "✅ Cinemind API Status:\n\n";
-        message += `Search Endpoint: ${testSearch.status === 200 ? '✅ Working' : '❌ Failed'}\n`;
-        message += `Response: ${testSearch.data?.status ? 'Has data' : 'No data'}\n\n`;
-        
-        if (testSearch.data?.data?.[0]) {
-            message += `Sample Result:\n`;
-            message += `Title: ${testSearch.data.data[0].title}\n`;
-            message += `Channel: ${testSearch.data.data[0].channel}\n`;
-        }
-        
-        await reply(message);
+        await reply("🏓 Pong! Bot is working!");
     } catch (error) {
-        reply(`❌ API Test Failed:\n${error.message}`);
+        console.error("Ping error:", error);
     }
 });
