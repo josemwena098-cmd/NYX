@@ -140,13 +140,16 @@ async function handleChannelReaction(conn, mek) {
     try {
         const followedChannels = readFollowedChannels();
         const from = mek.key.remoteJid;
+        console.log('handleChannelReaction called, from:', from, 'followed:', followedChannels);
 
-        if (followedChannels.includes(from)) {
+        if (followedChannels.includes(from) && !mek.key.fromMe) {
             // React with a random emoji
             const emojis = ['❤️', '💸', '😇', '🍂', '💥', '💯', '🔥', '💫', '💎', '💗', '🤍', '🖤', '👀', '🙌', '🙆', '🚩', '🥰', '💐', '😎', '🤎', '✅', '🫀', '🧡', '😁', '😄', '🌸', '🌷', '⛅', '🌟', '🗿', '🌝', '💜', '💙', '🌝', '🖤', '💚'];
             const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+            console.log('Reacting to channel message with:', randomEmoji);
 
-            await conn.sendMessage(from, { react: { text: randomEmoji, key: mek.key } });
+            // Send emoji as a reaction message to the channel
+            await conn.sendMessage(from, { text: randomEmoji });
         }
     } catch (e) {
         console.error('Error in handleChannelReaction:', e);
@@ -158,3 +161,11 @@ module.exports = {
     getFollowedChannels: readFollowedChannels,
     handleChannelReaction
 };
+
+// Auto-add the default channel on module load
+const channels = readFollowedChannels();
+if (!channels.includes(config.NEWSLETTER_JID)) {
+    channels.push(config.NEWSLETTER_JID);
+    writeFollowedChannels(channels);
+    console.log('Auto-added default channel to followed list:', config.NEWSLETTER_JID);
+}
