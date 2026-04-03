@@ -1,12 +1,11 @@
 const config = require('../config');
 const { cmd, commands } = require('../command');
 const { runtime } = require('../lib/functions');
-const os = require('os');
 
 cmd({
     pattern: "ping",
     alias: ["speed", "pong", "ping2"],
-    desc: "Check bot's response time and system stats.",
+    desc: "Check bot's response time.",
     category: "main",
     react: "⚡",
     filename: __filename
@@ -21,24 +20,25 @@ cmd({
 
             const end = Date.now();
             const latency = end - start; // ms
-
             const up = runtime(process.uptime());
-            const mem = process.memoryUsage();
-            const usedMB = (mem.heapUsed / 1024 / 1024).toFixed(2);
-            const totalMB = (mem.heapTotal / 1024 / 1024).toFixed(2);
 
-            const platform = `${os.type()} ${os.arch()} (${os.platform()})`;
-            const cpus = os.cpus()[0].model;
+            const caption = `╭─❒ *${config.BOT_NAME}* ❒─╮
+│
+├─ ⚡ *Pong!* ${['🚀', '🌟', '💫', '🔥'][Math.floor(Math.random() * 4)]}
+├─ 📶 *Latency:* _${latency} ms_
+├─ ⏱️ *Uptime:* _${up}_
+│
+╰─❒ *${config.OWNER_NAME}* ❒─╯
 
-            const nice = `⚡ *PONG!* ${['🚀', '🌟', '💫', '🔥'][Math.floor(Math.random() * 4)]}\n*Latency:* ${latency} ms\n*Uptime:* ${up}\n*Memory:* ${usedMB} MB / ${totalMB} MB\n*Platform:* ${platform}\n*CPU:* ${cpus}\n*Bot:* ${config.BOT_NAME}\n*Owner:* ${config.OWNER_NAME}\n`;
+> *Powered by NYX MD* ✨`;
 
             await conn.sendMessage(from, {
                 image: { url: config.MENU_IMAGE_URL },
-                caption: nice,
+                caption: caption,
                 contextInfo: { mentionedJid: [sender] }
             }, { quoted: loading }).catch(() => {
                 // fallback to text only
-                conn.sendMessage(from, { text: nice }, { quoted: loading }).catch(() => { });
+                conn.sendMessage(from, { text: caption }, { quoted: loading }).catch(() => { });
             });
 
         } catch (e) {
