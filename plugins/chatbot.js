@@ -1,14 +1,66 @@
 const { cmd } = require("../command");
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
 // T20-CLASSIC AI API Configuration
 const CHATGPT_API = "https://arimuqnlsqzunbqovakc.supabase.co/functions/v1/whatsapp-chat";
+
+// History file path
+const HISTORY_FILE = path.join(__dirname, '../data/chatbot_history.json');
 
 // Store chatbot state and conversation history
 const chatbotEnabled = new Map();
 const lastReplyTime = new Map();
 const conversationHistory = new Map();
+const userLastActivity = new Map();
 const REPLY_INTERVAL = 10000;
+const HISTORY_RETENTION_MS = 72 * 60 * 60 * 1000; // 72 hours
+
+// Load history from file
+function loadHistory() {
+    try {
+        if (fs.existsSync(HISTORY_FILE)) {
+            const data = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+            const now = Date.now();
+
+            // Filter out old entries
+            const filtered = {};
+            for (const [user, entry] of Object.entries(data)) {
+                if (now - entry.lastActivity < HISTORY_RETENTION_MS) {
+                    conversationHistory.set(user, entry.history);
+                    userLastActivity.set(user, entry.lastActivity);
+                }
+            }
+            console.log(`Loaded chatbot history for ${Object.keys(filtered).length} users`);
+        }
+    } catch (error) {
+        console.error('Error loading chatbot history:', error);
+    }
+}
+
+// Save history to file
+function saveHistory() {
+    try {
+        const data = {};
+        for (const [user, history] of conversationHistory) {
+            const lastActivity = userLastActivity.get(user) || Date.now();
+            data[user] = {
+                history: history,
+                lastActivity: lastActivity
+            };
+        }
+        fs.writeFileSync(HISTORY_FILE, JSON.stringify(data, null, 2));
+    } catch (error) {
+        console.error('Error saving chatbot history:', error);
+    }
+}
+
+// Load history on startup
+loadHistory();
+
+// Save history every 5 minutes
+setInterval(saveHistory, 5 * 60 * 1000);
 
 // Function to get AI response
 async function getAIResponse(user, message) {
@@ -42,6 +94,12 @@ async function getAIResponse(user, message) {
 
         history.push({ role: "assistant", content: aiResponse });
 
+        // Update last activity
+        userLastActivity.set(user, Date.now());
+
+        // Save history
+        saveHistory();
+
         return aiResponse;
 
     } catch (error) {
@@ -72,6 +130,7 @@ cmd({
     if (!current) {
         conversationHistory.set(user, []);
         lastReplyTime.set(user, 0);
+        userLastActivity.set(user, Date.now());
         reply("✅ *T20-CLASSIC AI Chatbot Enabled*\n\nI will now respond to your messages in this private chat. Send me anything to start a conversation!\n\nUse .chatbot again to disable.");
     } else {
         reply("❌ *Chatbot Disabled*\n\nI will no longer auto-respond in this chat.");
