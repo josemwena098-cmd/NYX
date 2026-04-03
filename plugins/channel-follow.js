@@ -34,42 +34,42 @@ cmd({
     category: "tools",
     filename: __filename
 },
-async (conn, mek, m, { from, args, isCreator, reply }) => {
-    try {
-        if (!isCreator) return reply("*📛 Only the owner can use this command!*");
-
-        const channelJid = args[0];
-        if (!channelJid) {
-            return reply("*🫟 Example: .follow 120363421014261315@newsletter*");
-        }
-
-        // Validate JID format (basic check)
-        if (!channelJid.includes('@newsletter')) {
-            return reply("*❌ Invalid channel JID. It should end with @newsletter*");
-        }
-
-        let followedChannels = readFollowedChannels();
-
-        if (followedChannels.includes(channelJid)) {
-            return reply("*ℹ️ This channel is already being followed.*");
-        }
-
-        followedChannels.push(channelJid);
-        writeFollowedChannels(followedChannels);
-
-        // Try to follow the channel
+    async (conn, mek, m, { from, args, isCreator, reply }) => {
         try {
-            await conn.newsletterFollow(channelJid);
-            reply(`✅ *Followed and added to auto-react list:*\n${channelJid}`);
-        } catch (e) {
-            reply(`✅ *Added to auto-react list:*\n${channelJid}\n⚠️ *Note: Could not follow the channel automatically.*`);
-        }
+            if (!isCreator) return reply("*📛 Only the owner can use this command!*");
 
-    } catch (e) {
-        console.error(e);
-        reply("❌ Error: " + e.message);
-    }
-});
+            const channelJid = args[0];
+            if (!channelJid) {
+                return reply("*🫟 Example: .follow 120363421014261315@newsletter*");
+            }
+
+            // Validate JID format (basic check)
+            if (!channelJid.includes('@newsletter')) {
+                return reply("*❌ Invalid channel JID. It should end with @newsletter*");
+            }
+
+            let followedChannels = readFollowedChannels();
+
+            if (followedChannels.includes(channelJid)) {
+                return reply("*ℹ️ This channel is already being followed.*");
+            }
+
+            followedChannels.push(channelJid);
+            writeFollowedChannels(followedChannels);
+
+            // Try to follow the channel
+            try {
+                await conn.newsletterFollow(channelJid);
+                reply(`✅ *Followed and added to auto-react list:*\n${channelJid}`);
+            } catch (e) {
+                reply(`✅ *Added to auto-react list:*\n${channelJid}\n⚠️ *Note: Could not follow the channel automatically.*`);
+            }
+
+        } catch (e) {
+            console.error(e);
+            reply("❌ Error: " + e.message);
+        }
+    });
 
 // Command to unfollow a channel
 cmd({
@@ -78,32 +78,32 @@ cmd({
     category: "tools",
     filename: __filename
 },
-async (conn, mek, m, { from, args, isCreator, reply }) => {
-    try {
-        if (!isCreator) return reply("*📛 Only the owner can use this command!*");
+    async (conn, mek, m, { from, args, isCreator, reply }) => {
+        try {
+            if (!isCreator) return reply("*📛 Only the owner can use this command!*");
 
-        const channelJid = args[0];
-        if (!channelJid) {
-            return reply("*🫟 Example: .unfollow 120363421014261315@newsletter*");
+            const channelJid = args[0];
+            if (!channelJid) {
+                return reply("*🫟 Example: .unfollow 120363421014261315@newsletter*");
+            }
+
+            let followedChannels = readFollowedChannels();
+
+            const index = followedChannels.indexOf(channelJid);
+            if (index === -1) {
+                return reply("*ℹ️ This channel is not in the followed list.*");
+            }
+
+            followedChannels.splice(index, 1);
+            writeFollowedChannels(followedChannels);
+
+            reply(`✅ *Removed from auto-react list:*\n${channelJid}`);
+
+        } catch (e) {
+            console.error(e);
+            reply("❌ Error: " + e.message);
         }
-
-        let followedChannels = readFollowedChannels();
-
-        const index = followedChannels.indexOf(channelJid);
-        if (index === -1) {
-            return reply("*ℹ️ This channel is not in the followed list.*");
-        }
-
-        followedChannels.splice(index, 1);
-        writeFollowedChannels(followedChannels);
-
-        reply(`✅ *Removed from auto-react list:*\n${channelJid}`);
-
-    } catch (e) {
-        console.error(e);
-        reply("❌ Error: " + e.message);
-    }
-});
+    });
 
 // Command to list followed channels
 cmd({
@@ -112,28 +112,28 @@ cmd({
     category: "tools",
     filename: __filename
 },
-async (conn, mek, m, { from, isCreator, reply }) => {
-    try {
-        if (!isCreator) return reply("*📛 Only the owner can use this command!*");
+    async (conn, mek, m, { from, isCreator, reply }) => {
+        try {
+            if (!isCreator) return reply("*📛 Only the owner can use this command!*");
 
-        const followedChannels = readFollowedChannels();
+            const followedChannels = readFollowedChannels();
 
-        if (followedChannels.length === 0) {
-            return reply("*ℹ️ No channels are currently being followed.*");
+            if (followedChannels.length === 0) {
+                return reply("*ℹ️ No channels are currently being followed.*");
+            }
+
+            let message = "*📢 Followed Channels:*\n\n";
+            followedChannels.forEach((jid, index) => {
+                message += `${index + 1}. ${jid}\n`;
+            });
+
+            reply(message);
+
+        } catch (e) {
+            console.error(e);
+            reply("❌ Error: " + e.message);
         }
-
-        let message = "*📢 Followed Channels:*\n\n";
-        followedChannels.forEach((jid, index) => {
-            message += `${index + 1}. ${jid}\n`;
-        });
-
-        reply(message);
-
-    } catch (e) {
-        console.error(e);
-        reply("❌ Error: " + e.message);
-    }
-});
+    });
 
 // Function to handle channel reactions
 async function handleChannelReaction(conn, mek) {
