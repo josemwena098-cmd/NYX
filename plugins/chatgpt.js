@@ -8,20 +8,6 @@ const API_KEY = "Godszeal";
 // Store conversation history for each user
 const conversationHistory = new Map();
 
-// Function to clean promotional text from responses
-function cleanResponse(text) {
-    if (!text) return text;
-
-    // Remove Pollinations.AI ads and promotional content
-    let cleaned = text.replace(/\*Support Pollinations\.AI:[\s\S]*?Powered by Pollinations\.AI.*?\[Support our mission\].*?\)/gi, '');
-    cleaned = cleaned.replace(/---[\s\S]*?Pollinations\.AI/gi, '');
-    cleaned = cleaned.replace(/"source":\s*"pollinations"/gi, '');
-    cleaned = cleaned.replace(/"model":\s*"[^"]*"/gi, '');
-    cleaned = cleaned.replace(/\n\n+/g, '\n\n'); // Remove excessive newlines
-
-    return cleaned.trim();
-}
-
 cmd({
     pattern: "chatgpt",
     alias: ["gpt", "ask", "ai"],
