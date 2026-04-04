@@ -6,6 +6,10 @@ const CHATGPT_API = "https://api.cinemind.name.ng/api/chatgpt";
 const API_KEY = "Godszeal";
 
 function cleanupResponse(text) {
+    // If text is an object, stringify it first
+    if (typeof text === "object" && text !== null) {
+        text = JSON.stringify(text);
+    }
     return String(text || "").replace(/\r\n/g, "\n").trim();
 }
 
@@ -72,7 +76,12 @@ cmd({
                 response.data.answer ||
                 response.data.data;
 
-            // If no specific field found, try stringifying the entire response
+            // If the extracted value is an object, stringify it
+            if (typeof responseText === "object" && responseText !== null) {
+                responseText = JSON.stringify(responseText);
+            }
+
+            // If no specific field found or it's empty, try stringifying the entire response
             if (!responseText) {
                 if (typeof response.data === "string") {
                     responseText = response.data;
@@ -178,6 +187,11 @@ cmd({
                 response.data.text ||
                 response.data.data;
 
+            // If the extracted value is an object, stringify it
+            if (typeof responseText === "object" && responseText !== null) {
+                responseText = JSON.stringify(responseText);
+            }
+
             // If no specific field found, try stringifying the entire response
             if (!responseText) {
                 if (typeof response.data === "string") {
@@ -240,7 +254,12 @@ cmd({
             response.data?.text ||
             response.data?.data;
 
-        // If no specific field found, try stringifying the entire response
+        // If the extracted value is an object, stringify it
+        if (typeof responseText === "object" && responseText !== null) {
+            responseText = JSON.stringify(responseText);
+        }
+
+        // If no specific field found or it's empty, try stringifying the entire response
         if (!responseText) {
             if (typeof response.data === "string") {
                 responseText = response.data;
@@ -302,7 +321,12 @@ cmd({
             response.data?.text ||
             response.data?.data;
 
-        // If no specific field found, try stringifying the entire response
+        // If the extracted value is an object, stringify it
+        if (typeof responseText === "object" && responseText !== null) {
+            responseText = JSON.stringify(responseText);
+        }
+
+        // If no specific field found or it's empty, try stringifying the entire response
         if (!responseText) {
             if (typeof response.data === "string") {
                 responseText = response.data;
@@ -468,7 +492,12 @@ cmd({
             response.data?.message ||
             response.data?.reply;
 
-        // If no specific field found, try stringifying the entire response
+        // If the extracted value is an object, stringify it
+        if (typeof responseText === "object" && responseText !== null) {
+            responseText = JSON.stringify(responseText);
+        }
+
+        // If no specific field found or it's empty, try stringifying the entire response
         if (!responseText) {
             if (typeof response.data === "string") {
                 responseText = response.data;
