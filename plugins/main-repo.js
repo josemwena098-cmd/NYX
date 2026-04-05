@@ -29,12 +29,12 @@ cmd({
 
             // Format the repository information in new stylish format
             const formattedInfo = `
-*┏────〘 *NYX* 〙───⊷*
+*┏────〘 *ZTX GROUP* 〙───⊷*
 *┃* *📌 Repository Name:* ${repoData.name}
-*┃* *👑 Owner:* BLAZE TEAM
+*┃* *👑 Owner:* TEKNOVA TEAM
 *┃* *⭐ Stars:* ${repoData.stargazers_count}
 *┃* *⑂ Forks:* ${repoData.forks_count}
-*┃* *📝 Description:* ${repoData.description || '*World Best WhatsApp Bot powered by NYX MD*'}
+*┃* *📝 Description:* ${repoData.description || '*World Best WhatsApp Bot powered by ZTX GROUP*'}
 *┃* *🔗 GitHub Link:* ${repoData.html_url}
 *┗──────────────⊷*
 `.trim();
@@ -49,7 +49,7 @@ cmd({
                     isForwarded: true,
                     forwardedNewsletterMessageInfo: {
                         newsletterJid: '120363424512102809@newsletter',
-                        newsletterName: 'NYX MD',
+                        newsletterName: 'ZTX GROUP',
                         serverMessageId: 143
                     }
                 }
